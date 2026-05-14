@@ -1,0 +1,14 @@
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local, device-specific notes (intentionally not committed)
+DEVICES.md
+DEVICES.local.md
+*.local.md

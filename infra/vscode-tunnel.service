@@ -1,0 +1,13 @@
+[Unit]
+Description=VS Code Remote Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/code tunnel --accept-server-license-terms --name %H
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
