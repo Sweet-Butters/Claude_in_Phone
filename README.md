@@ -117,7 +117,7 @@ Run [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) after cloning �
 
 **Base (code work only):**
 
-1. WSL2 + Ubuntu 24.04 — from a Windows PowerShell: `wsl --install -d Ubuntu-24.04`
+1. WSL2 + Ubuntu 24.04 — from a Windows PowerShell: `wsl --install -d Ubuntu-24.04`. Verify systemd is enabled (`cat /etc/wsl.conf` should show `[boot]` / `systemd=true`). Ubuntu 24.04 ships with this on; `wsl --import`-ed or older distros may need to add it manually then `wsl --shutdown` to apply. Step 6 (VS Code Tunnel user service) and step 7 (`systemctl enable --now ssh`) both require systemd.
 2. `sudo apt install -y git gh jq build-essential tmux`
 3. Generate per-device ed25519 SSH key and register it at https://github.com/settings/keys
 4. `gh auth login --hostname github.com --git-protocol ssh --web`

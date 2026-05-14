@@ -117,7 +117,7 @@ clone 직후 [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) 실행
 
 **기본 (코드 작업 가능):**
 
-1. WSL2 + Ubuntu 24.04 — Windows PowerShell에서 `wsl --install -d Ubuntu-24.04`
+1. WSL2 + Ubuntu 24.04 — Windows PowerShell에서 `wsl --install -d Ubuntu-24.04`. `cat /etc/wsl.conf`로 systemd 활성 확인 (`[boot]` / `systemd=true` 있어야 함). Ubuntu 24.04 기본은 켜져 있지만, `wsl --import`로 이전했거나 구버전 배포판은 직접 추가 후 `wsl --shutdown`으로 반영. 6번(VS Code Tunnel user service)과 7번(`systemctl enable --now ssh`)이 systemd 필요.
 2. `sudo apt install -y git gh jq build-essential tmux`
 3. 기기마다 ed25519 SSH 키 생성 → https://github.com/settings/keys 에 등록
 4. `gh auth login --hostname github.com --git-protocol ssh --web`
