@@ -158,6 +158,7 @@ Run [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) after cloning â
 ```jsonc
 {
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f*)",
@@ -168,6 +169,9 @@ Run [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) after cloning â
   }
 }
 ```
+
+- `defaultMode: "bypassPermissions"` makes new sessions skip the per-command prompt by default (matches the mobile-via-Termius preference). The `deny` patterns above are still hard-blocked regardless of mode.
+- Setting `defaultMode` may be classifier-rejected as self-modification when an agent tries to edit `settings.json`. Set it via `/config` or hand-edit the file when you're configuring this for yourself.
 
 Additional hygiene:
 

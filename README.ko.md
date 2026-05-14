@@ -158,6 +158,7 @@ clone 직후 [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) 실행
 ```jsonc
 {
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f*)",
@@ -168,6 +169,9 @@ clone 직후 [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) 실행
   }
 }
 ```
+
+- `defaultMode: "bypassPermissions"`는 새 세션부터 명령마다 묻지 않음 (Termius 모바일 워크플로와 정합). 위 `deny` 패턴은 모드 무관 hard-block.
+- `defaultMode`는 에이전트가 `settings.json`을 편집하려 들 때 self-modification으로 분류기에 거부될 수 있음 — 본인 셋업 시 `/config` 또는 직접 편집으로 진행.
 
 추가 위생 관리:
 
