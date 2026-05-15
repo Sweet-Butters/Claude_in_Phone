@@ -217,6 +217,26 @@ pkill -9 -f "claude code"
 
 ## 보안 하드닝
 
+### 위협 모델 — 본 셋업이 노출된 것과 노출되지 않은 것
+
+본 셋업의 SSH 는 **Tailscale tailnet 내부에서만** 접근 가능하고 공용 인터넷에는 노출되어 있지 않습니다. 그래서 일반적인 SSH 하드닝 조언 중 상당수는 이 환경의 위협 모델과 맞지 않습니다:
+
+| 일반 SSH 보안 조언 중 **여기엔 안 맞는 것** | 이유 |
+| --- | --- |
+| 22번 포트를 임의 5자리로 변경 | 인터넷 스캐너가 tailnet 에 도달 불가 — 공인 IP 가 listen 하고 있지 않음 |
+| `fail2ban` 설치 | 익명 brute-force 트래픽 자체가 도달하지 않음 |
+| 라우터에서 특정 WAN IP만 허용 | WAN 쪽 SSH 노출이 없음 — 필터링할 대상이 없음 |
+
+대신 실제 공격 표면은 좁지만 구체적입니다:
+
+1. **분실·도난 디바이스** 의 SSH private 키 + Tailscale identity 가 공격자 손에 들어가는 경우.
+2. **tailnet 의 다른 노드** 가 침해되는 경우 (tailnet peer 간 상호 도달 가능).
+3. **로컬 LAN 도달성** — `sshd` 가 `0.0.0.0` 에 binding 되어 있으면 가정 Wi-Fi 의 다른 기기도 접근 시도 가능.
+
+아래 항목들은 이 세 가지를 겨냥합니다.
+
+### Claude Code 권한 표면
+
 `bypassPermissions` + 모바일 조합은 destructive 명령의 의도치 않은 실행 위험이 가장 큰 환경. 글로벌 `~/.claude/settings.json`에 hard-block을 박아둠 — `deny` 패턴은 bypass 모드에서도 우회 불가:
 
 ```jsonc
@@ -237,11 +257,64 @@ pkill -9 -f "claude code"
 - `defaultMode: "bypassPermissions"`는 새 세션부터 명령마다 묻지 않음 (Termius 모바일 워크플로와 정합). 위 `deny` 패턴은 모드 무관 hard-block.
 - `defaultMode`는 에이전트가 `settings.json`을 편집하려 들 때 self-modification으로 분류기에 거부될 수 있음 — 본인 셋업 시 `/config` 또는 직접 편집으로 진행.
 
-추가 위생 관리:
+키 탈취 시나리오에 대한 추가 floor — 공격자가 OS 권한 상승이나 키 유출 도구로 체이닝하기 어렵게 하려면 `deny` 를 확장:
 
-- 각 기기 SSH 키에 passphrase 설정 (`ssh-keygen -t ed25519` 생성 시 입력).
-- 기기마다 별도 GitHub SSH 키 → 분실 시 해당 키만 revoke.
-- GitHub recovery code는 디바이스 밖에 (인쇄 또는 별도 password manager).
+```jsonc
+"Bash(sudo *)",
+"Bash(curl * | sh*)",
+"Bash(wget * | sh*)",
+"Bash(scp *)"
+```
+
+### SSH 키 위생
+
+- **모든 기기 SSH 키에 passphrase 설정.** 이미 passphrase 없이 생성한 키가 있다면: `ssh-keygen -p -f ~/.ssh/id_ed25519` — 같은 키를 보존한 채 passphrase 만 추가 (GitHub 재등록 불필요). passphrase 가 있으면 디바이스를 잠금 해제된 상태로 도난당해도 키 파일만으로는 로그인 불가.
+- **기기별 SSH 키 별도 등록.** 분실 시 해당 키 한 개만 revoke.
+- **GitHub recovery code 는 디바이스 밖에 보관** (인쇄, 또는 별도 password manager).
+
+### sshd 를 Tailscale 인터페이스로만 binding
+
+기본 `openssh-server` 는 `0.0.0.0:22` 에 listen → 가정 Wi-Fi 의 다른 기기도 도달 가능. tailnet peer 만 연결할 수 있게 제한:
+
+```bash
+# tailnet IPv4 확인
+tailscale ip -4
+
+# /etc/ssh/sshd_config (또는 /etc/ssh/sshd_config.d/ drop-in) 편집
+ListenAddress <tailnet-ipv4>
+ListenAddress 127.0.0.1            # `ssh localhost` 용 로컬 루프백 유지
+
+# 적용
+sudo systemctl restart ssh
+
+# 검증 — 위 두 주소만 보여야 하고 0.0.0.0 은 사라져야 함
+sudo ss -tlnp | grep sshd
+```
+
+부작용: 가정 Wi-Fi 의 다른 노트북에서 직접 SSH 도 차단됨 — 반드시 tailnet 에 먼저 합류해야 함. 보통은 의도하는 효과.
+
+### 모바일 디바이스 보안 (Termius 앱 잠금)
+
+폰 자체 잠금만으로는 잠금 해제된 상태로 분실 시 무력. Termius 는 OS 잠금 위에 앱 레벨 잠금 지원:
+
+- Termius → **Settings** → **Security / Privacy** → **App Lock** → Face ID / 지문 / PIN 설정.
+- 옵션: **Auto-lock** 을 짧은 timeout (예: 30 초) 으로 설정 → 백그라운드 진입 직후 즉시 재잠금.
+
+VS Code / Tailscale 앱도 동일 — 자격증명을 보관하는 모든 앱은 최소한 OS 레벨 앱 핀/개별 PIN 활성화.
+
+### 주기적 접속 로그 점검
+
+월 1회 정도 가볍게 — 알림 셋업 없이도 누가 언제 접속했는지 한 번씩 확인:
+
+```bash
+# 최근 30일 SSH 로그인 시도 (성공/실패 둘 다)
+journalctl -u ssh --since "30 days ago" | grep -E "Accepted|Failed"
+
+# Tailscale peer 활동 (admin console 에서도 확인 가능)
+tailscale status
+```
+
+`Accepted publickey` 라인에 낯선 source IP 또는 기기명 → 해당 GitHub SSH 키와 Tailscale 노드를 즉시 revoke.
 
 ## 백업 전략
 

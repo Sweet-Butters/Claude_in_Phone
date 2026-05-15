@@ -217,6 +217,26 @@ Mobile keyboards sometimes send `\n` (line feed) where a TUI expects `\r` (carri
 
 ## Security Hardening
 
+### Threat model — what this setup is and isn't exposed to
+
+SSH here is reachable **only over the Tailscale tailnet**, not the public internet. That changes which attacks apply:
+
+| Generic SSH advice that does **not** apply here | Why |
+| --- | --- |
+| Change port from 22 to a random 5-digit | Internet scanners can't reach the tailnet; no public IP listening |
+| Install `fail2ban` | No anonymous brute-force traffic arrives |
+| Allowlist specific WAN IPs at the router | No WAN-side SSH exposure to filter |
+
+The actual attack surface is narrower but concrete:
+
+1. **A lost or stolen device** whose SSH private key + Tailscale identity reaches an attacker.
+2. **Another tailnet node** being compromised (tailnet peers can reach each other).
+3. **Local LAN reachability** — if `sshd` binds to `0.0.0.0` and the WSL IP is reachable from the home Wi-Fi, anyone on that Wi-Fi can attempt to connect.
+
+The items below target those three.
+
+### Claude Code permission surface
+
 `bypassPermissions` + mobile = highest risk of an unintended destructive command. Add hard-blocks in the global `~/.claude/settings.json` — `deny` patterns are enforced even in bypass mode:
 
 ```jsonc
@@ -237,11 +257,64 @@ Mobile keyboards sometimes send `\n` (line feed) where a TUI expects `\r` (carri
 - `defaultMode: "bypassPermissions"` makes new sessions skip the per-command prompt by default (matches the mobile-via-Termius preference). The `deny` patterns above are still hard-blocked regardless of mode.
 - Setting `defaultMode` may be classifier-rejected as self-modification when an agent tries to edit `settings.json`. Set it via `/config` or hand-edit the file when you're configuring this for yourself.
 
-Additional hygiene:
+For stronger floors against a stolen-key scenario, consider extending `deny` to block paths an attacker would use to chain into the OS or exfiltrate keys:
 
-- Use a passphrase on each device's SSH key (`ssh-keygen -t ed25519` prompts for one).
-- Treat each device's GitHub SSH key as separately revocable — on device loss, revoke that one key only.
-- Keep GitHub recovery codes off-device (printed, or in a password manager on a separate device).
+```jsonc
+"Bash(sudo *)",
+"Bash(curl * | sh*)",
+"Bash(wget * | sh*)",
+"Bash(scp *)"
+```
+
+### SSH key hygiene
+
+- **Add a passphrase to every device's SSH key.** Already-existing key without one: `ssh-keygen -p -f ~/.ssh/id_ed25519` (rewrites the same key with a passphrase, no need to re-register on GitHub). With a passphrase, the key file alone is not enough to log in even if a device is stolen unlocked.
+- **One key per device, registered separately on GitHub.** Device loss → revoke that one key only.
+- **Keep GitHub recovery codes off-device** (printed, or in a password manager on a separate device).
+
+### Bind sshd to the Tailscale interface only
+
+By default `openssh-server` listens on `0.0.0.0:22` — reachable from anyone on the local Wi-Fi too. Restrict it to the Tailscale interface so only tailnet peers can connect:
+
+```bash
+# Find your tailnet IPv4
+tailscale ip -4
+
+# Edit /etc/ssh/sshd_config (or a drop-in under /etc/ssh/sshd_config.d/)
+ListenAddress <tailnet-ipv4>
+ListenAddress 127.0.0.1            # keep local loopback for `ssh localhost`
+
+# Apply
+sudo systemctl restart ssh
+
+# Verify — should show only the two addresses, no 0.0.0.0
+sudo ss -tlnp | grep sshd
+```
+
+Note: this hides SSH from the home Wi-Fi too, so e.g. another laptop on the same router can no longer SSH in directly — it must be on the tailnet first. That's usually what you want.
+
+### Mobile device security (Termius app lock)
+
+A phone lock alone doesn't help if the phone is found already unlocked. Termius supports an app-level lock on top of the OS lock:
+
+- Termius → **Settings** → **Security / Privacy** → **App Lock** → enable, set Face ID / fingerprint / PIN.
+- Optional: turn on **Auto-lock** with a short timeout (e.g. 30 s) so the lock re-engages quickly after the app is backgrounded.
+
+The same applies to VS Code / Tailscale apps on the phone — at minimum, the OS-level app pinning / per-app PIN should be on for anything that holds credentials.
+
+### Periodic access log review
+
+Monthly glance — even without alerting, check who connected and from where:
+
+```bash
+# SSH login attempts in the last 30 days (success + failure)
+journalctl -u ssh --since "30 days ago" | grep -E "Accepted|Failed"
+
+# Tailscale peer activity (also visible in the admin console)
+tailscale status
+```
+
+Unfamiliar source IP or device in `Accepted publickey` lines → revoke that GitHub SSH key and the corresponding Tailscale node immediately.
 
 ## Backup Strategy
 
