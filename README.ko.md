@@ -167,6 +167,54 @@ clone 직후 [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) 실행
 - 경로는 절대 경로 우선 — Bash 도구는 호출 간 cwd를 유지하지 않음.
 - 권한 모드: `bypassPermissions` 기본 (`~/.claude/settings.json`). Shift+Tab으로 토글.
 
+## 트러블슈팅
+
+### 폰과 노트북에 같은 화면이 보이고, 입력이 양쪽에서 다 들어감
+
+설계상 그렇습니다. 노트북과 폰이 같은 `claude` tmux 세션에 동시에 attach 되어 있으면 **모든 키 입력이 양쪽 클라이언트 간 공유**됩니다. 이게 본 워크플로의 핵심 — 노트북에서 작업 시작 → 그대로 두고 외출 → 폰에서 컨텍스트 손실 없이 이어서 작업, 이 흐름을 가능케 하는 메커니즘입니다.
+
+부작용: 두 클라이언트가 동시 attach 되어 있으면 tmux 가 화면을 **둘 중 더 작은 쪽** (보통 폰) 크기로 강제 축소시켜서 노트북 화면이 답답해집니다. 한 쪽만 단독으로 attach 하려면 다른 쪽을 강제로 떼어내면서 들어가야 합니다:
+
+```bash
+tmux attach -d -t claude   # -d 옵션 = 기존 attach된 다른 클라이언트를 detach 시킴
+```
+
+폰에서 reattach 할 때 매번 이 동작을 기본으로 하고 싶으면 [`scripts/claude-tmux-aliases.sh`](scripts/claude-tmux-aliases.sh) 의 `cc` 별칭을 다음으로 교체:
+
+```bash
+alias cc='tmux attach -d -t claude'
+```
+
+또는 안 쓰는 쪽에서 매번 detach (`Ctrl+B` 누른 뒤 손 떼고 `d`) 해두는 방법도 있음.
+
+### Claude Code 입력 박스가 멈춤 — Enter 누르면 줄바꿈만, 화살표/Ctrl 키가 `^[[A` / `^B` 로 글자로 찍힘
+
+증상: 타이핑은 입력창에 보이는데 Enter 가 줄바꿈만 추가, `Ctrl+B` 가 `^B` 로 찍힘, 화살표 키가 `^[[A` / `^[[B` 로 남음. Claude Code 프로세스가 hang 되어 키 입력 파서가 escape sequence 를 더 이상 해석하지 못하는 상태. `/usage` 같은 인터랙티브 dialog 가 dismiss 후 raw 입력 모드 복구에 실패할 때 자주 발생.
+
+세션 내부 키로는 복구 불가 — **밖에서** 죽여야 합니다. 별도 터미널 (랩탑이면 Windows Terminal 새 탭, 폰이면 새 SSH 세션) 을 열어서:
+
+```bash
+tmux ls                          # "claude" 세션이 살아있는지 확인
+tmux kill-session -t claude
+claude                           # 별칭 통해 깔끔하게 재시작
+```
+
+`tmux ls` 에 아무것도 없거나 세션 이름이 다르면 프로세스를 직접:
+
+```bash
+pkill -9 -f "claude code"
+```
+
+다른 클라이언트 (attach 중이던 쪽) 는 세션이 사라지면 알아서 종료됩니다. 이후 `claude` / `cc` 로 재접속.
+
+### 폰 (Termius): Enter 가 제출 안 됨, 줄바꿈만 추가됨
+
+모바일 키보드가 TUI 가 기대하는 `\r` (carriage return) 대신 `\n` (line feed) 을 보내는 경우가 있어, Claude Code 가 Enter 를 "줄바꿈 삽입" 으로만 처리.
+
+- **즉시 회피**: Termius 키바 (키보드 위쪽 단축키 줄) 에서 **`Ctrl`** 한 번 탭 → 일반 키보드에서 **`M`** 탭. `Ctrl+M` 이 `\r` 을 직접 보내서 제출됨.
+- **영구 해결**: Termius → 호스트 설정 → **Terminal** → **Return key** 를 `CR` (`\r`) 로 변경 (`LF` 나 Auto 가 아니어야 함).
+- **한글 IME** (Gboard 한글, 삼성 키보드 한글 등) 가 Termius 설정과 무관하게 터미널 앱에서 Enter 를 가로채는 경우가 잦음. 명령은 영어 키보드 모드로 입력하고 한글 내용은 클립보드/Termius snippet 으로 붙여넣기 권장.
+
 ## 보안 하드닝
 
 `bypassPermissions` + 모바일 조합은 destructive 명령의 의도치 않은 실행 위험이 가장 큰 환경. 글로벌 `~/.claude/settings.json`에 hard-block을 박아둠 — `deny` 패턴은 bypass 모드에서도 우회 불가:

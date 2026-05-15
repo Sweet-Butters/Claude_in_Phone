@@ -167,6 +167,54 @@ Run [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) after cloning �
 - Use absolute paths — the Bash tool's cwd does not persist across calls.
 - Permission mode is `bypassPermissions` by default (`~/.claude/settings.json`); toggle with Shift+Tab.
 
+## Troubleshooting
+
+### Both clients show the same screen / keystrokes mirror across devices
+
+This is by design. When the laptop and the phone are both attached to the same `claude` tmux session, every keystroke is shared — that's the whole point of the workflow: start work on the laptop, leave, and pick up on the phone without losing context.
+
+Side effect: with two clients attached at once, tmux resizes the shared pane to the **smaller** of the two (usually the phone), making the laptop view feel cramped. To attach as the sole client and force the other off:
+
+```bash
+tmux attach -d -t claude   # -d detaches any other client first
+```
+
+If you want this to be the default on phone reattach, swap the `cc` alias in [`scripts/claude-tmux-aliases.sh`](scripts/claude-tmux-aliases.sh):
+
+```bash
+alias cc='tmux attach -d -t claude'
+```
+
+Alternatively, detach (`Ctrl+B` then `d`) from the device you're not actively using.
+
+### Claude Code input frozen — Enter creates newlines, arrows/Ctrl appear as literal `^[[A` / `^B`
+
+Symptom: typing echoes into the input box, but Enter only adds newlines, `Ctrl+B` shows up as `^B`, arrow keys leave `^[[A` / `^[[B` in the text. The Claude Code process is hung; its key-input parser is no longer interpreting escape sequences. Often triggered by an interactive dialog (e.g. `/usage`) failing to restore raw input mode on dismiss.
+
+In-session keys cannot recover this — you must kill it from outside. Open a **separate** terminal (a new Windows Terminal tab on the laptop, or a fresh SSH session from the phone) and run:
+
+```bash
+tmux ls                          # confirm the "claude" session exists
+tmux kill-session -t claude
+claude                           # restart cleanly via the alias
+```
+
+If `tmux ls` shows nothing or the session is named differently, kill the process directly:
+
+```bash
+pkill -9 -f "claude code"
+```
+
+The other client (if attached) will exit on its own once the session is gone. Reattach with `claude` / `cc` afterward.
+
+### Mobile (Termius): Enter doesn't submit, only adds a newline
+
+Mobile keyboards sometimes send `\n` (line feed) where a TUI expects `\r` (carriage return), so Claude Code treats Enter as "insert newline" rather than "submit".
+
+- **Quick workaround**: tap **`Ctrl`** in the Termius key bar (top-of-keyboard row), then **`M`** on the regular keyboard. `Ctrl+M` sends `\r` directly and submits.
+- **Permanent fix**: in Termius → host settings → **Terminal** → set **Return key** to `CR` (`\r`), not `LF` or Auto.
+- **Korean IMEs** (Gboard 한글, Samsung Keyboard 한글, etc.) frequently swallow Enter inside terminal apps regardless of the Termius setting. Keep the soft keyboard in English mode when typing commands; paste Korean content via the clipboard / Termius snippets.
+
 ## Security Hardening
 
 `bypassPermissions` + mobile = highest risk of an unintended destructive command. Add hard-blocks in the global `~/.claude/settings.json` — `deny` patterns are enforced even in bypass mode:
