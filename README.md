@@ -111,6 +111,22 @@ cd ~/projects/Claude_in_Phone
 claude
 ```
 
+**Shell aliases** (optional, recommended for the mobile workflow)
+
+[`scripts/claude-tmux-aliases.sh`](scripts/claude-tmux-aliases.sh) wraps `claude` in a persistent tmux session named `claude` so a desktop session started before leaving can be reattached from a phone over SSH — including approving any permission prompts that appear after you've left.
+
+Install once per device:
+```bash
+cat scripts/claude-tmux-aliases.sh >> ~/.bashrc && source ~/.bashrc
+```
+
+| Command | Effect |
+| --- | --- |
+| `claude` | Start (or attach to) the persistent `claude` tmux session |
+| `cc` | Quick reattach from a fresh shell (e.g. after SSH from phone) |
+| `Ctrl+b` then `d` | Detach without killing the session |
+| `tmux ls` | List sessions |
+
 ## New Device Setup
 
 Run [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) after cloning — it handles steps 2–4 + known_hosts in one go. Steps 6–7 (tunnel + tailnet) are intentionally manual.
@@ -198,6 +214,7 @@ Single failure points to be aware of:
 ├── infra/
 │   └── vscode-tunnel.service    # systemd user unit
 └── scripts/
+    ├── claude-tmux-aliases.sh   # bash aliases — wrap claude in a persistent tmux session
     └── setup-new-device.sh      # automates new-device base setup
 ```
 

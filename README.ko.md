@@ -111,6 +111,22 @@ cd ~/projects/Claude_in_Phone
 claude
 ```
 
+**셸 별칭** (선택, 모바일 워크플로 권장)
+
+[`scripts/claude-tmux-aliases.sh`](scripts/claude-tmux-aliases.sh)는 `claude`를 `claude`라는 이름의 지속적 tmux 세션으로 감싸서, 외출 전 노트북에서 시작한 세션을 폰에서 SSH로 그대로 이어받게 함 — 외출 이후 뜨는 권한 prompt도 폰에서 직접 승인 가능.
+
+각 기기에서 한 번씩 설치:
+```bash
+cat scripts/claude-tmux-aliases.sh >> ~/.bashrc && source ~/.bashrc
+```
+
+| 명령 | 효과 |
+| --- | --- |
+| `claude` | 지속적 `claude` tmux 세션 시작 (있으면 attach) |
+| `cc` | 새 셸에서 빠른 재접속 (예: 폰에서 SSH 접속 후) |
+| `Ctrl+b` 후 `d` | 세션 유지한 채 분리 |
+| `tmux ls` | 세션 목록 |
+
 ## 새 기기 셋업
 
 clone 직후 [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) 실행 — 2~4단계 + known_hosts 설정을 한 번에 처리. 6·7번은 의도적으로 수동.
@@ -198,6 +214,7 @@ clone 직후 [`scripts/setup-new-device.sh`](scripts/setup-new-device.sh) 실행
 ├── infra/
 │   └── vscode-tunnel.service    # systemd user unit
 └── scripts/
+    ├── claude-tmux-aliases.sh   # bash 별칭 — claude를 지속적 tmux 세션으로 감싸기
     └── setup-new-device.sh      # 새 기기 base 셋업 자동화
 ```
 
